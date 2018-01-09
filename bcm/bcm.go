@@ -31,23 +31,26 @@ EGLNativeWindowType eglNativeWindow(EGLint *winWidth, EGLint *winHeight)
 
 	success = graphics_get_display_size(0, winWidth, winHeight);
 	if (success < 0) {
-		return NULL;
+		return 0;
 	}
 
 	rectDst.x            = 0;
 	rectDst.y            = 0;
 	rectDst.width        = mode.width;
 	rectDst.height       = mode.height;
+
 	rectSrc.x            = 0;
 	rectSrc.y            = 0;
 	rectSrc.width        = *winWidth  << 16;
 	rectSrc.height       = *winHeight << 16;
+
 	nativeWindow.width   = *winWidth;
 	nativeWindow.height  = *winHeight;
 
 	display = vc_dispmanx_display_open(0);
 	update  = vc_dispmanx_update_start(0);
-	nativeWindow.element = vc_dispmanx_element_add(update,
+	nativeWindow.element = vc_dispmanx_element_add(
+						   update,
 						   display,
 						   0,
 						   &rectDst,
@@ -88,35 +91,35 @@ EGLDisplayState *eglOpenDisplay()
 	state.win.height = 0;
 
 	native_window = eglNativeWindow(&state.win.width, &state.win.height);
-	if (native_window == NULL) {
-		return NULL;
+	if (native_window == 0) {
+		return 0;
 	}
 
 	state.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
 	if (state.display == EGL_NO_DISPLAY) {
-		return NULL;
+		return 0;
 	}
 	if (!eglInitialize(state.display, NULL, NULL)) {
-		return NULL;
+		return 0;
 	}
 	if (!eglGetConfigs(state.display, NULL, 0, &num)) {
-		return NULL;
+		return 0;
 	}
 	if (!eglChooseConfig(state.display, attribList, &config, 1, &num)) {
-		return NULL;
+		return 0;
 	}
 
 	state.surface = eglCreateWindowSurface(state.display, config, native_window, NULL);
 	if (state.surface == EGL_NO_SURFACE) {
-		return NULL;
+		return 0;
 	}
 	state.context = eglCreateContext(state.display, config, EGL_NO_CONTEXT, contextAttribs);
 	if (state.context == EGL_NO_CONTEXT) {
-		return NULL;
+		return 0;
 	}
 
 	if (!eglMakeCurrent(state.display, state.surface, state.surface, state.context)) {
-		return NULL;
+		return 0;
 	}
 
 	return &state;
