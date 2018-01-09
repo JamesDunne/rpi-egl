@@ -17,7 +17,7 @@ typedef struct {
 	EGLContext context;
 } EGLDisplayState;
 
-EGLNativeWindowType eglNativeWindow(EGLint *winWidth, EGLint *winHeight, EGLint winFlags)
+EGLNativeWindowType eglNativeWindow(EGLint *winWidth, EGLint *winHeight)
 {
 	static EGL_DISPMANX_WINDOW_T nativeWindow;
 	DISPMANX_ELEMENT_HANDLE_T    element;
@@ -25,18 +25,15 @@ EGLNativeWindowType eglNativeWindow(EGLint *winWidth, EGLint *winHeight, EGLint 
 	DISPMANX_MODEINFO_T          mode;
 	DISPMANX_UPDATE_HANDLE_T     update;
 	VC_RECT_T                    rectDst, rectSrc;
-	VC_DISPMANX_ALPHA_T          alpha = {DISPMANX_FLAGS_ALPHA_FIXED_ALL_PIXELS, 255, 0};
+	int32_t success;
 
 	bcm_host_init();
-	display = vc_dispmanx_display_open(0);
-	update  = vc_dispmanx_update_start(0);
-	vc_dispmanx_display_get_info(display, &mode);
-	if (*winHeight == 0 && *winWidth == 0)
-		*winHeight = 480;
-	if (*winHeight == 0)
-		*winHeight = *winWidth * mode.height / mode.width;
-	if (*winWidth == 0)
-		*winWidth = *winHeight * mode.width / mode.height;
+
+	success = graphics_get_display_size(0, winWidth, winHeight);
+	if (success < 0) {
+		return NULL;
+	}
+
 	rectDst.x            = 0;
 	rectDst.y            = 0;
 	rectDst.width        = mode.width;
@@ -47,6 +44,9 @@ EGLNativeWindowType eglNativeWindow(EGLint *winWidth, EGLint *winHeight, EGLint 
 	rectSrc.height       = *winHeight << 16;
 	nativeWindow.width   = *winWidth;
 	nativeWindow.height  = *winHeight;
+
+	display = vc_dispmanx_display_open(0);
+	update  = vc_dispmanx_update_start(0);
 	nativeWindow.element = vc_dispmanx_element_add(update,
 						   display,
 						   0,
@@ -54,48 +54,71 @@ EGLNativeWindowType eglNativeWindow(EGLint *winWidth, EGLint *winHeight, EGLint 
 						   0,
 						   &rectSrc,
 						   DISPMANX_PROTECTION_NONE,
-						   &alpha,
+						   0,
 						   0,
 						   0);
+
 	vc_dispmanx_update_submit_sync(update);
-	vc_dispmanx_display_close(display);
+	//vc_dispmanx_display_close(display);
+
 	return (EGLNativeWindowType) &nativeWindow;
 }
 
-EGLDisplayState *eglOpenDisplay(EGLint winMinSize, EGLint attribColorSize, EGLint attribAlphaSize, EGLint attribZDepth, EGLint attribRenderType)
+EGLDisplayState *eglOpenDisplay()
 {
 	static EGLDisplayState state;
 	EGLint attribList[] = {
-		EGL_RED_SIZE,        8,
-		EGL_GREEN_SIZE,      8,
-		EGL_BLUE_SIZE,       8,
-		EGL_ALPHA_SIZE,      8,
-		EGL_DEPTH_SIZE,      0,
-		EGL_RENDERABLE_TYPE, EGL_OPENGL_ES_BIT,
-		EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
+		EGL_RED_SIZE,        5,
+		EGL_GREEN_SIZE,      6,
+		EGL_BLUE_SIZE,       5,
+		EGL_ALPHA_SIZE,      EGL_DONT_CARE,
+		EGL_DEPTH_SIZE,      EGL_DONT_CARE,
+		EGL_STENCIL_SIZE,    EGL_DONT_CARE,
+		EGL_SAMPLE_BUFFERS,  0,
 		EGL_NONE
 	};
+	EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
 	EGLint    num;
 	EGLConfig config;
+	EGLNativeWindowType native_window;
 
-	if (attribRenderType & EGL_OPENVG_BIT)
-		eglBindAPI(EGL_OPENVG_API);
-	else
-		eglBindAPI(EGL_OPENGL_ES_API);
-	attribList[1]    = attribList[3] = attribList[5] = attribColorSize;
-	attribList[7]    = attribAlphaSize;
-	attribList[9]    = attribZDepth;
-	attribList[11]   = attribRenderType;
 	state.win.x      = 0;
 	state.win.y      = 0;
 	state.win.width  = 0;
-	state.win.height = winMinSize;
-	state.display    = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-	eglInitialize(state.display, NULL, NULL);
-	eglChooseConfig(state.display, attribList, &config, 1, &num);
-	state.context = eglCreateContext(state.display, config, EGL_NO_CONTEXT, NULL);
-	state.surface = eglCreateWindowSurface(state.display, config, eglNativeWindow(&state.win.width, &state.win.height, 0), NULL);
-	eglMakeCurrent(state.display, state.surface, state.surface, state.context);
+	state.win.height = 0;
+
+	native_window = eglNativeWindow(&state.win.width, &state.win.height);
+	if (native_window == NULL) {
+		return NULL;
+	}
+
+	state.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+	if (state.display == EGL_NO_DISPLAY) {
+		return NULL;
+	}
+	if (!eglInitialize(state.display, NULL, NULL)) {
+		return NULL;
+	}
+	if (!eglGetConfigs(state.display, NULL, 0, &num)) {
+		return NULL;
+	}
+	if (!eglChooseConfig(state.display, attribList, &config, 1, &num)) {
+		return NULL;
+	}
+
+	state.surface = eglCreateWindowSurface(state.display, config, native_window, NULL);
+	if (state.surface == EGL_NO_SURFACE) {
+		return NULL;
+	}
+	state.context = eglCreateContext(state.display, config, EGL_NO_CONTEXT, contextAttribs);
+	if (state.context == EGL_NO_CONTEXT) {
+		return NULL;
+	}
+
+	if (!eglMakeCurrent(state.display, state.surface, state.surface, state.context)) {
+		return NULL;
+	}
+
 	return &state;
 }
 
@@ -107,20 +130,37 @@ void eglCloseDisplay(EGLDisplayState *state)
 	eglTerminate(state->display);
 }
 
+void eglUpdateDisplay(EGLDisplayState *state)
+{
+	eglSwapBuffers(state->display, state->surface);
+}
+
 */
 import "C"
+
+import "fmt"
 
 type Display struct {
 	state *C.EGLDisplayState
 }
 
-func OpenDisplay() *Display {
-	state := C.eglOpenDisplay(480, 8, 0, 0, C.EGL_OPENGL_ES_BIT)
+type EGLError int32
+
+func getLastError() EGLError {
+	return EGLError(C.eglGetError())
+}
+
+func (e EGLError) Error() string {
+	return fmt.Sprintf("egl errno=%d", e)
+}
+
+func OpenDisplay() (*Display, error) {
+	state := C.eglOpenDisplay()
 	if state == nil {
-		return nil
+		return nil, getLastError()
 	}
 
-	return &Display{state: state}
+	return &Display{state: state}, nil
 }
 
 func (d *Display) Close() {
@@ -136,5 +176,5 @@ func (d *Display) Height() int {
 }
 
 func (d *Display) SwapBuffers() {
-	C.eglSwapBuffers(d.state.display, d.state.surface)
+	C.eglUpdateDisplay(d.state)
 }
