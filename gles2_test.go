@@ -13,10 +13,6 @@ func TestOpenGLInit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = gl.Init()
-	if err != nil {
-		t.Fatal(err)
-	}
 	display.Close()
 }
 
@@ -26,10 +22,7 @@ func TestClear(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer display.Close()
-	err = gl.Init()
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	gl.ClearColor(0.10, 0.33, 0.33, 1.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 	display.SwapBuffers()
