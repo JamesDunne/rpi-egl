@@ -3,6 +3,11 @@ package bcm
 // #cgo linux  CFLAGS: -I/opt/vc/include
 // #cgo linux LDFLAGS: -L/opt/vc/lib -lEGL -lGLESv2 -lbcm_host
 /*
+#include <linux/kd.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#include <stdio.h>
+
 #include <bcm_host.h>
 #include <EGL/egl.h>
 
@@ -147,6 +152,23 @@ EGLBoolean eglUpdateDisplay(EGLDisplayState *state)
 	return eglSwapBuffers(state->display, state->surface);
 }
 
+void ttyGraphics()
+{
+	// Need sudo for this:
+	int kbfd = open("/dev/tty", O_RDWR);
+	if (kbfd >= 0) {
+		ioctl(kbfd, KDSETMODE, KD_GRAPHICS);
+	}
+}
+
+void ttyText()
+{
+	// Need sudo for this:
+	int kbfd = open("/dev/tty", O_RDWR);
+	if (kbfd >= 0) {
+		ioctl(kbfd, KDSETMODE, KD_TEXT);
+	}
+}
 */
 import "C"
 
@@ -172,10 +194,15 @@ func OpenDisplay() (*Display, error) {
 		return nil, getLastError()
 	}
 
+	// Switch tty1 to graphics mode:
+	C.ttyGraphics()
+
 	return &Display{state: state}, nil
 }
 
 func (d *Display) Close() {
+	C.ttyText()
+
 	C.eglCloseDisplay(d.state)
 }
 
