@@ -125,17 +125,26 @@ EGLDisplayState *eglOpenDisplay()
 	return &state;
 }
 
-void eglCloseDisplay(EGLDisplayState *state)
+EGLBoolean eglCloseDisplay(EGLDisplayState *state)
 {
-	eglMakeCurrent(state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-	eglDestroySurface(state->display, state->surface);
-	eglDestroyContext(state->display, state->context);
-	eglTerminate(state->display);
+	if (!eglMakeCurrent(state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT)) {
+		return EGL_FALSE;
+	}
+	if (!eglDestroySurface(state->display, state->surface)) {
+		return EGL_FALSE;
+	}
+	if (!eglDestroyContext(state->display, state->context)) {
+		return EGL_FALSE;
+	}
+	if (!eglTerminate(state->display)) {
+		return EGL_FALSE;
+	}
+	return EGL_TRUE;
 }
 
-void eglUpdateDisplay(EGLDisplayState *state)
+EGLBoolean eglUpdateDisplay(EGLDisplayState *state)
 {
-	eglSwapBuffers(state->display, state->surface);
+	return eglSwapBuffers(state->display, state->surface);
 }
 
 */
@@ -154,7 +163,7 @@ func getLastError() EGLError {
 }
 
 func (e EGLError) Error() string {
-	return fmt.Sprintf("egl errno=%d", e)
+	return fmt.Sprintf("egl errno=0x%04x", e)
 }
 
 func OpenDisplay() (*Display, error) {
@@ -178,6 +187,9 @@ func (d *Display) Height() int {
 	return int(d.state.win.height)
 }
 
-func (d *Display) SwapBuffers() {
-	C.eglUpdateDisplay(d.state)
+func (d *Display) SwapBuffers() error {
+	if C.eglUpdateDisplay(d.state) == 0 {
+		return getLastError()
+	}
+	return nil
 }
