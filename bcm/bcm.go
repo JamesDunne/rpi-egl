@@ -25,13 +25,10 @@ typedef struct {
 	DISPMANX_DISPLAY_HANDLE_T    dmx_display;
 	DISPMANX_UPDATE_HANDLE_T     dmx_update;
 	EGL_DISPMANX_WINDOW_T        nativeWindow;
-
 } EGLDisplayState;
 
-EGLDisplayState *eglOpenDisplay()
+EGLint eglOpenDisplay(EGLDisplayState *state)
 {
-	static EGLDisplayState state;
-
 	EGLint attribList[] = {
 		EGL_RED_SIZE,        5,
 		EGL_GREEN_SIZE,      6,
@@ -45,41 +42,40 @@ EGLDisplayState *eglOpenDisplay()
 	EGLint    num;
 	EGLConfig config;
 
-	VC_RECT_T   rectDst, rectSrc;
+	VC_RECT_T rectDst, rectSrc;
 
 	int32_t success;
 
 	bcm_host_init();
 
-	success = graphics_get_display_size(0, &state.win.width, &state.win.height);
-	if (success < 0) {
-		return 0;
-	}
+	state->win.x      = 0;
+	state->win.y      = 0;
+	state->win.width  = 0;
+	state->win.height = 0;
 
-	state.win.x      = 0;
-	state.win.y      = 0;
-	state.win.width  = 0;
-	state.win.height = 0;
+	success = graphics_get_display_size(0, &state->win.width, &state->win.height);
+	if (success < 0) {
+		return 1;
+	}
 
 	rectDst.x            = 0;
 	rectDst.y            = 0;
-	rectDst.width        = state.win.width;
-	rectDst.height       = state.win.height;
+	rectDst.width        = state->win.width;
+	rectDst.height       = state->win.height;
 
 	rectSrc.x            = 0;
 	rectSrc.y            = 0;
-	rectSrc.width        = state.win.width  << 16;
-	rectSrc.height       = state.win.height << 16;
+	rectSrc.width        = state->win.width  << 16;
+	rectSrc.height       = state->win.height << 16;
 
-	state.nativeWindow.width   = state.win.width;
-	state.nativeWindow.height  = state.win.height;
+	state->dmx_display = vc_dispmanx_display_open(0);
+	state->dmx_update  = vc_dispmanx_update_start(0);
 
-	state.dmx_display = vc_dispmanx_display_open(0);
-	state.dmx_update  = vc_dispmanx_update_start(10);
-
-	state.nativeWindow.element = vc_dispmanx_element_add(
-		state.dmx_update,
-		state.dmx_display,
+	state->nativeWindow.width   = state->win.width;
+	state->nativeWindow.height  = state->win.height;
+	state->nativeWindow.element = vc_dispmanx_element_add(
+		state->dmx_update,
+		state->dmx_display,
 		0,
 		&rectDst,
 		0,
@@ -89,42 +85,42 @@ EGLDisplayState *eglOpenDisplay()
 		0,
 		0
 	);
-	state.dmx_element = state.nativeWindow.element;
+	state->dmx_element = state->nativeWindow.element;
 
-	success = vc_dispmanx_update_submit_sync(state.dmx_update);
-	if (!success) {
-		return 0;
+	success = vc_dispmanx_update_submit_sync(state->dmx_update);
+	if (success != 0) {
+		return 2;
 	}
 
 	// Create EGL context:
-	state.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-	if (state.display == EGL_NO_DISPLAY) {
-		return 0;
+	state->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+	if (state->display == EGL_NO_DISPLAY) {
+		return 3;
 	}
-	if (!eglInitialize(state.display, NULL, NULL)) {
-		return 0;
+	if (!eglInitialize(state->display, NULL, NULL)) {
+		return 4;
 	}
-	if (!eglGetConfigs(state.display, NULL, 0, &num)) {
-		return 0;
+	if (!eglGetConfigs(state->display, NULL, 0, &num)) {
+		return 5;
 	}
-	if (!eglChooseConfig(state.display, attribList, &config, 1, &num)) {
-		return 0;
-	}
-
-	state.surface = eglCreateWindowSurface(state.display, config, (EGLNativeWindowType) &state.nativeWindow, NULL);
-	if (state.surface == EGL_NO_SURFACE) {
-		return 0;
-	}
-	state.context = eglCreateContext(state.display, config, EGL_NO_CONTEXT, contextAttribs);
-	if (state.context == EGL_NO_CONTEXT) {
-		return 0;
+	if (!eglChooseConfig(state->display, attribList, &config, 1, &num)) {
+		return 6;
 	}
 
-	if (!eglMakeCurrent(state.display, state.surface, state.surface, state.context)) {
-		return 0;
+	state->surface = eglCreateWindowSurface(state->display, config, (EGLNativeWindowType) &state->nativeWindow, NULL);
+	if (state->surface == EGL_NO_SURFACE) {
+		return 7;
+	}
+	state->context = eglCreateContext(state->display, config, EGL_NO_CONTEXT, contextAttribs);
+	if (state->context == EGL_NO_CONTEXT) {
+		return 8;
 	}
 
-	return &state;
+	if (!eglMakeCurrent(state->display, state->surface, state->surface, state->context)) {
+		return 9;
+	}
+
+	return 0;
 }
 
 EGLBoolean eglCloseDisplay(EGLDisplayState *state)
@@ -191,12 +187,14 @@ func getLastError() EGLError {
 }
 
 func (e EGLError) Error() string {
-	return fmt.Sprintf("egl errno=0x%04x", e)
+	return fmt.Sprintf("egl errno=0x%04x", int32(e))
 }
 
 func OpenDisplay() (*Display, error) {
-	state := C.eglOpenDisplay()
-	if state == nil {
+	state := (*C.EGLDisplayState)(C.malloc(C.sizeof_EGLDisplayState))
+	step := C.eglOpenDisplay(state)
+	if step != 0 {
+		fmt.Printf("step %d\n", step)
 		return nil, getLastError()
 	}
 
