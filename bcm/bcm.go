@@ -155,21 +155,23 @@ EGLBoolean eglUpdateDisplay(EGLDisplayState *state)
 	return eglSwapBuffers(state->display, state->surface);
 }
 
-void ttyGraphics()
+void ttyGraphics(const char *tty)
 {
 	// Need sudo or tty group for this:
-	int kbfd = open("/dev/tty0", O_WRONLY);
+	int kbfd = open(tty, O_WRONLY);
 	if (kbfd >= 0) {
 		ioctl(kbfd, KDSETMODE, KD_GRAPHICS);
+		close(kbfd);
 	}
 }
 
-void ttyText()
+void ttyText(const char *tty)
 {
 	// Need sudo or tty group for this:
-	int kbfd = open("/dev/tty0", O_WRONLY);
+	int kbfd = open(tty, O_WRONLY);
 	if (kbfd >= 0) {
 		ioctl(kbfd, KDSETMODE, KD_TEXT);
+		close(kbfd);
 	}
 }
 */
@@ -188,7 +190,7 @@ func getLastError() EGLError {
 }
 
 func (e EGLError) Error() string {
-	return fmt.Sprintf("egl errno=0x%04x", int32(e))
+	return fmt.Sprintf("egl error=0x%04x", int32(e))
 }
 
 func OpenDisplay() (*Display, error) {
@@ -199,16 +201,18 @@ func OpenDisplay() (*Display, error) {
 		return nil, getLastError()
 	}
 
-	// Switch tty to graphics mode:
-	C.ttyGraphics()
-
 	return &Display{state: state}, nil
 }
 
-func (d *Display) Close() {
-	// Revert tty back to text mode:
-	C.ttyText()
+func TTYGraphicsMode(tty string) {
+	C.ttyGraphics(C.CString(tty))
+}
 
+func TTYTextMode(tty string) {
+	C.ttyText(C.CString(tty))
+}
+
+func (d *Display) Close() {
 	C.eglCloseDisplay(d.state)
 }
 
