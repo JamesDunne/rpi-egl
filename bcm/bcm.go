@@ -36,6 +36,7 @@ EGLint eglOpenDisplay(EGLDisplayState *state)
 		EGL_ALPHA_SIZE,      EGL_DONT_CARE,
 		EGL_DEPTH_SIZE,      EGL_DONT_CARE,
 		EGL_STENCIL_SIZE,    EGL_DONT_CARE,
+		EGL_MIN_SWAP_INTERVAL, 0,
 		EGL_NONE
 	};
 	EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
@@ -221,6 +222,13 @@ func (d *Display) Height() int {
 
 func (d *Display) SwapBuffers() error {
 	if C.eglUpdateDisplay(d.state) == 0 {
+		return getLastError()
+	}
+	return nil
+}
+
+func (d *Display) SwapInterval(interval int32) error {
+	if C.eglSwapInterval(d.state.display, C.EGLint(interval)) == 0 {
 		return getLastError()
 	}
 	return nil
