@@ -27,15 +27,15 @@ typedef struct {
 	EGL_DISPMANX_WINDOW_T        nativeWindow;
 } EGLDisplayState;
 
-EGLint eglOpenDisplay(EGLDisplayState *state)
+EGLint eglOpenDisplay(EGLDisplayState *state, EGLint red, EGLint green, EGLint blue)
 {
 	EGLint attribList[] = {
-		EGL_RED_SIZE,        5,
-		EGL_GREEN_SIZE,      6,
-		EGL_BLUE_SIZE,       5,
-		EGL_ALPHA_SIZE,      EGL_DONT_CARE,
-		EGL_DEPTH_SIZE,      EGL_DONT_CARE,
-		EGL_STENCIL_SIZE,    EGL_DONT_CARE,
+		EGL_RED_SIZE,          red,
+		EGL_GREEN_SIZE,        green,
+		EGL_BLUE_SIZE,         blue,
+		EGL_ALPHA_SIZE,        EGL_DONT_CARE,
+		EGL_DEPTH_SIZE,        EGL_DONT_CARE,
+		EGL_STENCIL_SIZE,      EGL_DONT_CARE,
 		EGL_MIN_SWAP_INTERVAL, 0,
 		EGL_NONE
 	};
@@ -193,9 +193,9 @@ func (e EGLError) Error() string {
 	return fmt.Sprintf("egl error=0x%04x", int32(e))
 }
 
-func OpenDisplay() (*Display, error) {
+func OpenDisplay(red, green, blue int) (*Display, error) {
 	state := (*C.EGLDisplayState)(C.malloc(C.sizeof_EGLDisplayState))
-	step := C.eglOpenDisplay(state)
+	step := C.eglOpenDisplay(state, C.EGLint(red), C.EGLint(green), C.EGLint(blue))
 	if step != 0 {
 		fmt.Printf("step %d\n", step)
 		return nil, getLastError()
